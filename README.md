@@ -128,4 +128,9 @@ Technical enhancement
             }
 
 
+5 - Documentation
+    - My final thoughts is that an application should be future-proof and flexible. As I dive into my past experience implementing good code practices which includes DRY, clean code that allows for better maintanability and for extending eventual future changes, these were mostly done in monolithic websites where development time was/is sometimes longer and not very flexible to integrate new services.
+    - I believe modern applications should be lego-layed so we can add or remove services as we wish or as the client wishes, in summary make it agile so we can decrease development time, cut costs, decrease time to market features and deployments.
+
+
     
