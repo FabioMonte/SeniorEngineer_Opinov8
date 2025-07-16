@@ -13,4 +13,119 @@ Technical enhancement
     I would recommend a API-FIrst approach for a new solution architecture.
         -  The advantages of it is that the application could use diferent services throughout, allowing for more flexibility in what to add/decouple from the app. This provides better maintainability, flexibility and enables for a more agile approach amking it quicker to adapt to new changes in the market
         - CI/CD to keep track of changes, allowing for quick fixes and more frequent releases.
-        - Observability to monitor performance, errors and incidents that occur. This provides a better response to problems that may arise and diagnose performance issues 
+        - Observability to monitor performance, errors and incidents that occur. This provides a better response to problems that may arise and diagnose performance issues
+4- Hands-On example
+
+    Using a method I created recently using an inline SQL statement we could refactor it into a Repository that allows us to move it into an API-FIrst approach.
+
+        public static List<UserCourseProgress> GetUserCourseProgress()
+        {
+            // Query to retrieve user course progress with course details
+            var getAllData = "SELECT ucp.Id AS UserCourseProgressId, ucp.UserId, ucp.CourseId, ucp.IsCompleted, icd.Title, icd.Thumbnail, icd.Users FROM UserCourseProgress ucp LEFT JOIN ItemType_CourseDetail icd ON ucp.CourseId = icd.Id";
+
+            List<UserCourseProgress> result = new List<UserCourseProgress>();
+            
+            using (IDataReader getUserProgressData = Database.CreateDataReader(getAllData))
+            {
+                while (getUserProgressData.Read())
+                {
+                    result.Add(new UserCourseProgress
+                    {
+                        CourseId = getUserProgressData["CourseId"].ToString(),
+                        UserId = (int)getUserProgressData["UserId"],
+                        IsCompleted = (bool)getUserProgressData["IsCompleted"],
+                        Title = getUserProgressData["Title"] == DBNull.Value ? null : getUserProgressData["Title"].ToString(),
+                        Thumbnail = getUserProgressData["Thumbnail"] == DBNull.Value ? null : getUserProgressData["Thumbnail"].ToString(),
+                        Users = getUserProgressData["Users"] == DBNull.Value || string.IsNullOrEmpty(getUserProgressData["Users"].ToString())
+                            ? new List<string>()
+                            : getUserProgressData["Users"].ToString().Split(',').ToList(),
+
+                    });
+                }
+            }
+
+            return result;
+        }
+
+    The UserCourseProgress already exists which is copied below:
+
+        public class UserCourseProgress
+            {
+                public int UserId { get; set; }
+                public string CourseId { get; set; }
+                public bool IsCompleted { get; set; }
+                public string Title { get; set; }
+                public string Thumbnail { get; set; }
+                public List<string> Users { get; set; }
+            }
+
+    We could then create a repository interface:
+
+        public interface IUserCourseProgressRepository
+            {
+                List<UserCourseProgress> GetAllUserCourseProgress();
+            }
+
+    Implement the Interface method to isolate the SQL:
+
+        public class UserCourseProgressRepository : IUserCourseProgressRepository
+            {
+                public List<UserCourseProgress> GetAllUserCourseProgress()
+                {
+                    var query = @"
+                        SELECT 
+                            ucp.Id AS UserCourseProgressId, 
+                            ucp.UserId, 
+                            ucp.CourseId, 
+                            ucp.IsCompleted, 
+                            icd.Title, 
+                            icd.Thumbnail, 
+                            icd.Users 
+                        FROM UserCourseProgress ucp 
+                        LEFT JOIN ItemType_CourseDetail icd ON ucp.CourseId = icd.Id";
+
+                    var result = new List<UserCourseProgress>();
+
+                    using (IDataReader reader = Database.CreateDataReader(query))
+                    {
+                        while (reader.Read())
+                        {
+                            result.Add(new UserCourseProgress
+                            {
+                                CourseId = reader["CourseId"].ToString(),
+                                UserId = (int)reader["UserId"],
+                                IsCompleted = (bool)reader["IsCompleted"],
+                                Title = reader["Title"] == DBNull.Value ? null : reader["Title"].ToString(),
+                                Thumbnail = reader["Thumbnail"] == DBNull.Value ? null : reader["Thumbnail"].ToString(),
+                                Users = reader["Users"] == DBNull.Value || string.IsNullOrEmpty(reader["Users"].ToString())
+                                    ? new List<string>()
+                                    : reader["Users"].ToString().Split(',').ToList()
+                            });
+                        }
+                    }
+
+                    return result;
+                }
+            }
+
+    Inject it into a controller so we can expose the logic via OpenAPI (for our API-First based approach)
+
+        public class UserProgressController : ControllerBase
+            {
+                private readonly IUserCourseProgressService _service;
+
+                public UserProgressController(IUserCourseProgressService service)
+                {
+                    _service = service;
+                }
+
+                [HttpGet]
+                public IActionResult GetAll()
+                {
+                    var progress = _service.GetProgressForAllUsers();
+                    return Ok(progress);
+                }
+            }
+
+
+    
